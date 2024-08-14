@@ -1,7 +1,6 @@
 package dev.dubhe.gugle.carpet.mixin;
 
 import com.mojang.brigadier.CommandDispatcher;
-import dev.dubhe.gugle.carpet.commands.BotCommand;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;

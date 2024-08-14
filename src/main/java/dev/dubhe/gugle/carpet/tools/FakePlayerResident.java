@@ -7,6 +7,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.dubhe.gugle.carpet.GcaSetting;
 import dev.dubhe.gugle.carpet.mixin.APAccessor;
+import dev.dubhe.gugle.carpet.GcaExtension;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -59,10 +60,16 @@ public class FakePlayerResident {
         boolean flying = fakePlayer.get("flying").getAsBoolean();
         if (GcaSetting.fakePlayerReloadAction && fakePlayer.has("actions")) {
             JsonObject actions = fakePlayer.get("actions").getAsJsonObject();
-            EntityPlayerMPFake playerMPFake = EntityPlayerMPFake.createFake(username, server, new Vec3(pos_x, pos_y, pos_z), yaw, pitch,
+            if (EntityPlayerMPFake.createFake(username, server, new Vec3(pos_x, pos_y, pos_z), yaw, pitch,
                     ResourceKey.create(Registries.DIMENSION, new ResourceLocation(dimension)),
-                    GameType.byName(gamemode), flying);
-            apFromJson(actions, playerMPFake);
+                    GameType.byName(gamemode), flying)){
+                // get fake player
+                EntityPlayerMPFake playerMPFake = (EntityPlayerMPFake) server.getPlayerList().getPlayerByName(username);
+                apFromJson(actions, playerMPFake);
+            }
+            else{
+                GcaExtension.LOGGER.error("Could not create fake player resident: {}", username);
+            }
         }
     }
 
