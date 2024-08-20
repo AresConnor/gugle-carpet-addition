@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings("unused")
 public class GcaExtension implements CarpetExtension, ModInitializer {
@@ -43,7 +44,7 @@ public class GcaExtension implements CarpetExtension, ModInitializer {
         return new ResourceLocation(MOD_ID, path);
     }
 
-    public static final HashMap<Player, Map.Entry<FakePlayerInventoryContainer, FakePlayerEnderChestContainer>> fakePlayerInventoryContainerMap = new HashMap<>();
+    public static final ConcurrentHashMap<Player, Map.Entry<FakePlayerInventoryContainer, FakePlayerEnderChestContainer>> fakePlayerInventoryContainerMap = new ConcurrentHashMap<>();
 
     public static final List<Map.Entry<Long, Function>> planFunction = new ArrayList<>();
 
@@ -51,11 +52,13 @@ public class GcaExtension implements CarpetExtension, ModInitializer {
         CarpetServer.manageExtension(new GcaExtension());
     }
 
+    public static Map.Entry<FakePlayerInventoryContainer, FakePlayerEnderChestContainer> newFakePlayerInventoryContainer(Player player) {
+        return Map.entry(new FakePlayerInventoryContainer(player), new FakePlayerEnderChestContainer(player));
+    }
+
     @Override
     public void onPlayerLoggedIn(ServerPlayer player) {
-        GcaExtension.fakePlayerInventoryContainerMap.put(player, Map.entry(
-            new FakePlayerInventoryContainer(player), new FakePlayerEnderChestContainer(player)
-        ));
+        GcaExtension.fakePlayerInventoryContainerMap.put(player, newFakePlayerInventoryContainer(player));
     }
 
     @Override

@@ -15,7 +15,10 @@
     "ServerLevelMixin",
     "ServerPlaceRecipeMixin",
     "SignBlockMixin",
-    "MinecraftServerMixin"
+    "MinecraftServerMixin",
+    "EntityInvoker",
+    "EntityPlayerMPFakeInvoker",
+    "PlayerAccessor"
   ],
   "server": [
   ],

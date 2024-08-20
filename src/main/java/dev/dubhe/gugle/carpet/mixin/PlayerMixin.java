@@ -32,7 +32,8 @@ abstract class PlayerMixin {
     private void tick(CallbackInfo ci) {
         if (gca$self instanceof ServerPlayer serverPlayer &&
             serverPlayer instanceof EntityPlayerMPFake && serverPlayer.isAlive()) {
-            Map.Entry<FakePlayerInventoryContainer, FakePlayerEnderChestContainer> entry = GcaExtension.fakePlayerInventoryContainerMap.get(gca$self);
+            Map.Entry<FakePlayerInventoryContainer, FakePlayerEnderChestContainer> entry = GcaExtension.fakePlayerInventoryContainerMap
+                .computeIfAbsent(gca$self, GcaExtension::newFakePlayerInventoryContainer);
             entry.getKey().tick();
             entry.getValue().tick();
         }

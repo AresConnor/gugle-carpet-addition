@@ -1,20 +1,35 @@
 package dev.dubhe.gugle.carpet.tools;
 
+import carpet.CarpetSettings;
 import carpet.fakes.ServerPlayerInterface;
 import carpet.helpers.EntityPlayerActionPack;
 import carpet.patches.EntityPlayerMPFake;
+import carpet.patches.FakeClientConnection;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.mojang.authlib.GameProfile;
+import dev.dubhe.gugle.carpet.GcaExtension;
 import dev.dubhe.gugle.carpet.GcaSetting;
 import dev.dubhe.gugle.carpet.mixin.APAccessor;
-import dev.dubhe.gugle.carpet.GcaExtension;
+import dev.dubhe.gugle.carpet.mixin.EntityInvoker;
+import dev.dubhe.gugle.carpet.mixin.EntityPlayerMPFakeInvoker;
+import dev.dubhe.gugle.carpet.mixin.PlayerAccessor;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.game.ClientboundRotateHeadPacket;
+import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ClientInformation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.server.players.GameProfileCache;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 
@@ -47,6 +62,53 @@ public class FakePlayerResident {
         return fakePlayer;
     }
 
+    public static void createFake(String username, MinecraftServer server, Vec3 pos, double yaw, double pitch, ResourceKey<Level> dimensionId, GameType gamemode, boolean flying, JsonObject actions, Runnable onError) {
+        ServerLevel worldIn = server.getLevel(dimensionId);
+        GameProfileCache.setUsesAuthentication(false);
+
+        GameProfile gameprofile;
+        try {
+            gameprofile = (GameProfile) server.getProfileCache().get(username).orElse(null);
+        } finally {
+            GameProfileCache.setUsesAuthentication(server.isDedicatedServer() && server.usesAuthentication());
+        }
+
+        if (gameprofile == null) {
+            if (!CarpetSettings.allowSpawningOfflinePlayers) {
+                onError.run();
+                return;
+            }
+
+            gameprofile = new GameProfile(UUIDUtil.createOfflinePlayerUUID(username), username);
+        }
+
+        final GameProfile finalProfile = gameprofile;
+        EntityPlayerMPFakeInvoker.invokeFetchGameProfile(gameprofile.getName()).thenAccept((p) -> {
+            GameProfile current = finalProfile;
+            if (p.isPresent()) {
+                current = (GameProfile) p.get();
+            }
+            System.out.println("try create FakePlayerResident: " + current.getName());
+            EntityPlayerMPFake instance = EntityPlayerMPFake.respawnFake(server, worldIn, current, ClientInformation.createDefault());
+            instance.fixStartingPosition = () -> {
+                instance.moveTo(pos.x, pos.y, pos.z, (float) yaw, (float) pitch);
+            };
+            server.getPlayerList().placeNewPlayer(new FakeClientConnection(PacketFlow.SERVERBOUND), instance, new CommonListenerCookie(current, 0, instance.clientInformation()));
+            instance.teleportTo(worldIn, pos.x, pos.y, pos.z, (float) yaw, (float) pitch);
+            instance.setHealth(20.0F);
+
+            instance.setMaxUpStep(0.6F);
+            instance.gameMode.changeGameModeForPlayer(gamemode);
+            server.getPlayerList().broadcastAll(new ClientboundRotateHeadPacket(instance, (byte) ((int) (instance.yHeadRot * 256.0F / 360.0F))), dimensionId);
+            server.getPlayerList().broadcastAll(new ClientboundTeleportEntityPacket(instance), dimensionId);
+            instance.getEntityData().set(PlayerAccessor.getCustomizationData(), (byte) 127);
+            instance.getAbilities().flying = flying;
+
+            apFromJson(actions, instance);
+            ((EntityInvoker) instance).unsetRemoved();
+        });
+    }
+
     public static void load(Map.@NotNull Entry<String, JsonElement> entry, MinecraftServer server) {
         String username = entry.getKey();
         JsonObject fakePlayer = entry.getValue().getAsJsonObject();
@@ -58,19 +120,25 @@ public class FakePlayerResident {
         String dimension = fakePlayer.get("dimension").getAsString();
         String gamemode = fakePlayer.get("gamemode").getAsString();
         boolean flying = fakePlayer.get("flying").getAsBoolean();
+
+        JsonObject actions = new JsonObject();
         if (GcaSetting.fakePlayerReloadAction && fakePlayer.has("actions")) {
-            JsonObject actions = fakePlayer.get("actions").getAsJsonObject();
-            if (EntityPlayerMPFake.createFake(username, server, new Vec3(pos_x, pos_y, pos_z), yaw, pitch,
-                    ResourceKey.create(Registries.DIMENSION, new ResourceLocation(dimension)),
-                    GameType.byName(gamemode), flying)){
-                // get fake player
-                EntityPlayerMPFake playerMPFake = (EntityPlayerMPFake) server.getPlayerList().getPlayerByName(username);
-                apFromJson(actions, playerMPFake);
-            }
-            else{
-                GcaExtension.LOGGER.error("Could not create fake player resident: {}", username);
-            }
+            actions = fakePlayer.get("actions").getAsJsonObject();
         }
+        createFake(
+                username,
+                server,
+                new Vec3(pos_x, pos_y, pos_z),
+                yaw,
+                pitch,
+                ResourceKey.create(Registries.DIMENSION, new ResourceLocation(dimension)),
+                GameType.byName(gamemode),
+                flying,
+                actions,
+                () -> {
+                    GcaExtension.LOGGER.error("Not allow spawning offline players!");
+                }
+        );
     }
 
     static @NotNull JsonObject apToJson(EntityPlayerActionPack ap) {

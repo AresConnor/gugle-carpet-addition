@@ -1,5 +1,6 @@
 package dev.dubhe.gugle.carpet.api.menu;
 
+import dev.dubhe.gugle.carpet.GcaExtension;
 import dev.dubhe.gugle.carpet.api.menu.control.Button;
 import dev.dubhe.gugle.carpet.api.menu.control.ButtonList;
 import net.minecraft.world.Container;
